@@ -6,8 +6,9 @@ import { getStoryboard, hasCustomVideo } from '../lib/storyboards'
 import { useActiveRange } from '../hooks/useAppState'
 import { DrillCard } from '../components/DrillCard'
 import { GreenReader } from '../components/GreenReader'
+import { LessonReader } from '../components/LessonReader'
 import { LessonVideo } from '../components/LessonVideo'
-import { Badge, Button, Card, SectionTitle, Segmented, Sheet } from '../components/ui'
+import { Badge, Card, Segmented } from '../components/ui'
 import { Range } from './Range'
 
 /**
@@ -74,7 +75,12 @@ function LessonLibrary() {
   const [video, setVideo] = useState<Lesson | null>(null)
   const [greens, setGreens] = useState(false)
   const list = LESSONS.filter((l) => cat === 'all' || l.category === cat)
-  const featured = LESSONS.filter((l) => hasCustomVideo(l.id))
+  const featured = LESSONS.filter((l) => hasCustomVideo(l.id)).slice(0, 8)
+  const catIcon = (id: Lesson['category']) => LESSON_CATEGORIES.find((c) => c.id === id)?.icon ?? '⛳'
+
+  const openIdx = open ? list.findIndex((l) => l.id === open.id) : -1
+  const nextLesson = openIdx >= 0 && openIdx < list.length - 1 ? list[openIdx + 1] : null
+
   return (
     <div>
       {/* AI video rail */}
@@ -89,11 +95,14 @@ function LessonLibrary() {
               <button
                 key={l.id}
                 onClick={() => setVideo(l)}
-                className="shrink-0 w-40 rounded-2xl border border-line bg-surface text-left p-3 active:scale-[0.97] transition-transform"
+                className="shrink-0 w-44 rounded-2xl border border-line bg-gradient-to-b from-surface-2 to-surface text-left p-3 active:scale-[0.97] transition-transform"
               >
-                <div className="h-9 w-9 rounded-full bg-accent text-[#04130d] flex items-center justify-center font-bold pl-0.5 mb-2">▶</div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="h-9 w-9 rounded-full bg-accent text-[#04130d] flex items-center justify-center font-bold pl-0.5">▶</div>
+                  <span className="text-base">{catIcon(l.category)}</span>
+                </div>
                 <div className="text-[13px] font-semibold leading-snug">{l.title.split(':')[0]}</div>
-                <div className="text-[11px] text-faint mt-1">Narrated · generated on-device</div>
+                <div className="text-[11px] text-faint mt-1">Narrated · ~90 sec</div>
               </button>
             ))}
           </div>
@@ -105,7 +114,7 @@ function LessonLibrary() {
           onClick={() => setCat('all')}
           className={`shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] ${cat === 'all' ? 'bg-accent text-[#04130d] border-accent font-semibold' : 'bg-surface-2 border-line text-muted'}`}
         >
-          All
+          All {LESSONS.length}
         </button>
         {LESSON_CATEGORIES.map((c) => (
           <button
@@ -117,32 +126,52 @@ function LessonLibrary() {
           </button>
         ))}
       </div>
+
       <div className="flex flex-col gap-2.5">
         {list.map((l) => (
-          <Card key={l.id} onClick={() => setOpen(l)}>
-            <div className="flex items-center justify-between gap-2">
-              <div className="font-semibold text-sm">{l.title}</div>
-              <Badge tone={l.level === 'beginner' ? 'good' : l.level === 'intermediate' ? 'gold' : 'bad'}>
-                {l.level}
-              </Badge>
+          <Card key={l.id} onClick={() => setOpen(l)} className="!p-0 overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-start justify-between gap-2.5">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <span className="text-lg leading-none mt-0.5">{catIcon(l.category)}</span>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-[14px] leading-snug">{l.title}</div>
+                    <div className="text-[11px] text-faint mt-0.5">{l.minutes} min · {l.keys.length} keys · {l.checkpoints.length} checkpoints</div>
+                  </div>
+                </div>
+                <Badge tone={l.level === 'beginner' ? 'good' : l.level === 'intermediate' ? 'gold' : 'bad'}>
+                  {l.level}
+                </Badge>
+              </div>
+              <p className="text-[13px] text-muted mt-2 leading-relaxed line-clamp-2">{l.summary}</p>
             </div>
-            <p className="text-[13px] text-muted mt-1 leading-relaxed">{l.summary}</p>
-            <div className="flex items-center justify-between mt-1.5">
-              <span className="text-[11px] text-faint">{l.minutes} min read</span>
+            <div className="flex border-t border-line/60 divide-x divide-line/60">
+              <button
+                onClick={(e) => { e.stopPropagation(); setOpen(l) }}
+                className="flex-1 py-2.5 text-[13px] font-semibold text-muted active:bg-surface-2"
+              >
+                📖 Read
+              </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setVideo(l) }}
-                className="text-[12px] font-semibold text-accent-bright"
+                className="flex-1 py-2.5 text-[13px] font-semibold text-accent-bright active:bg-surface-2"
               >
-                ▶ Watch AI video
+                ▶ Watch
               </button>
             </div>
           </Card>
         ))}
       </div>
 
-      <Sheet open={open !== null} onClose={() => setOpen(null)} title={open?.title}>
-        {open && <LessonView lesson={open} onWatch={() => { setVideo(open); setOpen(null) }} />}
-      </Sheet>
+      {open && (
+        <LessonReader
+          lesson={open}
+          onClose={() => setOpen(null)}
+          onWatch={() => setVideo(open)}
+          onNext={nextLesson ? () => setOpen(nextLesson) : null}
+          nextTitle={nextLesson?.title}
+        />
+      )}
 
       {video && (
         <LessonVideo
@@ -151,42 +180,6 @@ function LessonLibrary() {
         />
       )}
       <GreenReader open={greens} onClose={() => setGreens(false)} />
-    </div>
-  )
-}
-
-function LessonView({ lesson, onWatch }: { lesson: Lesson; onWatch: () => void }) {
-  return (
-    <div className="pb-3">
-      <Button size="sm" className="mb-3" onClick={onWatch}>▶ Watch the AI video version</Button>
-      <p className="text-sm text-muted leading-relaxed">{lesson.summary}</p>
-
-      <div className="mt-4 rounded-xl border border-accent/25 bg-accent/5 p-3.5">
-        <div className="text-[11px] uppercase tracking-wider text-accent-bright font-semibold mb-2">Keys</div>
-        <ul className="flex flex-col gap-1.5">
-          {lesson.keys.map((k, i) => (
-            <li key={i} className="text-[13px] leading-snug flex gap-2">
-              <span className="text-accent-bright">✓</span>
-              <span>{k}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {lesson.steps.map((s, i) => (
-        <div key={i} className="mt-4">
-          <div className="font-semibold text-sm mb-1">
-            <span className="text-accent-bright mr-1.5">{i + 1}.</span>
-            {s.heading}
-          </div>
-          <p className="text-[13px] text-muted leading-relaxed">{s.body}</p>
-        </div>
-      ))}
-
-      <div className="mt-4 rounded-xl border border-gold/25 bg-gold/5 p-3.5">
-        <div className="text-[11px] uppercase tracking-wider text-gold font-semibold mb-1">Pro tip</div>
-        <p className="text-[13px] leading-relaxed">{lesson.proTip}</p>
-      </div>
     </div>
   )
 }
