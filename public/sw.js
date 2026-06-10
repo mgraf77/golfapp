@@ -1,6 +1,7 @@
-/* TrueCaddie service worker — offline-ready app shell */
-const CACHE = 'truecaddie-v1'
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png']
+/* TrueCaddie service worker — offline-ready app shell.
+   All paths are relative to the SW location so the app works at any mount path. */
+const CACHE = 'truecaddie-v2'
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -27,10 +28,10 @@ self.addEventListener('fetch', (event) => {
       fetch(request)
         .then((res) => {
           const copy = res.clone()
-          caches.open(CACHE).then((cache) => cache.put('/index.html', copy))
+          caches.open(CACHE).then((cache) => cache.put('./index.html', copy))
           return res
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => caches.match('./index.html'))
     )
     return
   }
