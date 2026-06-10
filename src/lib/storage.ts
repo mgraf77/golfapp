@@ -8,10 +8,16 @@ export function loadState(): AppState | null {
     if (!raw) return null
     const parsed = JSON.parse(raw) as AppState
     if (!parsed || typeof parsed !== 'object' || !parsed.profile) return null
-    return parsed
+    return migrate(parsed)
   } catch {
     return null
   }
+}
+
+/** Forward-migrate older persisted states so updates never wipe user data. */
+function migrate(s: AppState): AppState {
+  if (s.version >= 2) return s
+  return { ...s, version: 2, scores: s.scores ?? [] }
 }
 
 export function saveState(state: AppState): void {

@@ -88,6 +88,12 @@ export interface LoggedShot extends ShotInput {
   shotNumber: number
   normalized: NormalizedShot
   feedback: string
+  // GPS-tracked shots carry precise positions + strokes-gained anchors
+  start?: { lat: number; lng: number }
+  end?: { lat: number; lng: number }
+  gpsYards?: number
+  sgBefore?: { lie: 'tee' | 'fairway' | 'rough' | 'sand' | 'recovery' | 'green'; dist: number }
+  sgAfter?: { lie: 'tee' | 'fairway' | 'rough' | 'sand' | 'recovery' | 'green'; dist: number }
 }
 
 // ── Rounds & courses ────────────────────────────────────────────────────
@@ -140,6 +146,16 @@ export interface Round {
   conditions: Conditions
   holes: HoleResult[]
   recap?: string
+  /** 'gps' rounds reference a downloaded GeoCourse and carry live weather. */
+  mode?: 'card' | 'gps'
+  geoCourseId?: string
+  courseName?: string
+  weather?: import('./geo').WeatherSnapshot
+  rating?: number
+  slope?: number
+  coursePar?: number
+  /** Per-hole par/yardage snapshot for GPS rounds (so history survives course deletion). */
+  holeMeta?: { number: number; par: number; yards: number; handicap: number }[]
 }
 
 // ── Range ───────────────────────────────────────────────────────────────
@@ -226,9 +242,11 @@ export interface AppState {
   rangeSessions: RangeSession[]
   activeRoundId: string | null
   activeRangeId: string | null
+  /** WHS scoring record (auto-posted from rounds + manual entries). */
+  scores: import('./geo').ScoreEntry[]
 }
 
-export type Tab = 'home' | 'play' | 'range' | 'insights' | 'profile'
+export type Tab = 'home' | 'play' | 'practice' | 'swing' | 'insights' | 'profile'
 
 // ── Derived analytics ───────────────────────────────────────────────────
 

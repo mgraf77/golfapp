@@ -3,11 +3,13 @@ import type {
   AppState, BagClub, ClubId, Conditions, HoleResult, LoggedShot, PlayerProfile,
   RangeGoal, RangeSession, RangeShot, Round, ShotInput,
 } from '../types'
+import type { GeoCourse, ScoreEntry, WeatherSnapshot } from '../types/geo'
 import { buildSeedState } from '../data/seed'
 import { getCourse } from '../data/courses'
 import {
   generateRangeShotFeedback, generateRangeSummary, generateRoundRecap, generateShotFeedback,
 } from '../lib/aiCoach'
+import { adjustedGrossScore, courseHandicap, scoreDifferential } from '../lib/handicap'
 import { normalizeShot } from '../lib/shotNormalization'
 import { clearState, loadState, saveState } from '../lib/storage'
 import { uid } from '../lib/utils'
@@ -17,13 +19,18 @@ type Action =
   | { type: 'UPDATE_PROFILE'; profile: Partial<PlayerProfile> }
   | { type: 'UPDATE_BAG_CLUB'; clubId: ClubId; carry: number; total: number }
   | { type: 'START_ROUND'; courseId: string; conditions: Conditions }
-  | { type: 'LOG_SHOT'; input: ShotInput }
-  | { type: 'FINISH_HOLE'; putts: number }
+  | { type: 'START_GPS_ROUND'; course: GeoCourse; weather: WeatherSnapshot | null }
+  | { type: 'LOG_SHOT'; input: ShotInput; gps?: Pick<LoggedShot, 'start' | 'end' | 'gpsYards' | 'sgBefore' | 'sgAfter'> }
+  | { type: 'UPDATE_LAST_SHOT'; holeNumber: number; patch: Partial<LoggedShot> }
+  | { type: 'FINISH_HOLE'; putts: number; strokesOverride?: number }
+  | { type: 'GO_TO_HOLE'; holeNumber: number }
   | { type: 'END_ROUND' }
   | { type: 'ABANDON_ROUND' }
   | { type: 'START_RANGE'; goal: RangeGoal; clubIds: ClubId[]; drillId: string }
   | { type: 'LOG_RANGE_SHOT'; shot: Omit<RangeShot, 'id' | 'n' | 'feedback'> }
   | { type: 'END_RANGE' }
+  | { type: 'ADD_SCORE'; entry: Omit<ScoreEntry, 'id' | 'differential'> }
+  | { type: 'DELETE_SCORE'; id: string }
   | { type: 'RESET_DEMO' }
 
 function reducer(state: AppState, action: Action): AppState {
@@ -61,6 +68,33 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, rounds: [...state.rounds, round], activeRoundId: round.id }
     }
 
+    case 'START_GPS_ROUND': {
+      const { course } = action
+      const round: Round = {
+        id: uid('round_'),
+        courseId: course.id,
+        date: new Date().toISOString(),
+        status: 'active',
+        currentHole: course.holes[0]?.number ?? 1,
+        conditions: weatherToConditions(action.weather),
+        holes: course.holes.map(
+          (h): HoleResult => ({
+            holeNumber: h.number, par: h.par, strokes: 0, putts: 0,
+            fairway: 'na', gir: false, penalties: 0, shots: [],
+          }),
+        ),
+        mode: 'gps',
+        geoCourseId: course.id,
+        courseName: course.name,
+        weather: action.weather ?? undefined,
+        rating: course.rating,
+        slope: course.slope,
+        coursePar: course.par,
+        holeMeta: course.holes.map((h) => ({ number: h.number, par: h.par, yards: h.yards, handicap: h.handicap })),
+      }
+      return { ...state, rounds: [...state.rounds, round], activeRoundId: round.id }
+    }
+
     case 'LOG_SHOT': {
       const round = state.rounds.find((r) => r.id === state.activeRoundId)
       if (!round) return state
@@ -68,6 +102,7 @@ function reducer(state: AppState, action: Action): AppState {
       if (!hole) return state
       const shot: LoggedShot = {
         ...action.input,
+        ...action.gps,
         id: uid('shot_'),
         ts: Date.now(),
         holeNumber: round.currentHole,
@@ -104,17 +139,38 @@ function reducer(state: AppState, action: Action): AppState {
       if (!round) return state
       const hole = round.holes.find((h) => h.holeNumber === round.currentHole)
       if (!hole) return state
-      const strokes = hole.shots.length + hole.penalties + action.putts
-      const isLast = round.currentHole >= round.holes.length
+      const strokes = action.strokesOverride ?? hole.shots.length + hole.penalties + action.putts
+      const idx = round.holes.findIndex((h) => h.holeNumber === round.currentHole)
+      const isLast = idx >= round.holes.length - 1
       const next = updateRound(state, round.id, (r) => ({
         ...r,
-        currentHole: isLast ? r.currentHole : r.currentHole + 1,
+        currentHole: isLast ? r.currentHole : r.holes[idx + 1].holeNumber,
         holes: r.holes.map((h) =>
           h.holeNumber === r.currentHole ? { ...h, putts: action.putts, strokes } : h,
         ),
       }))
       if (isLast) return finishRound(next, round.id)
       return next
+    }
+
+    case 'GO_TO_HOLE': {
+      const round = state.rounds.find((r) => r.id === state.activeRoundId)
+      if (!round) return state
+      return updateRound(state, round.id, (r) => ({ ...r, currentHole: action.holeNumber }))
+    }
+
+    case 'UPDATE_LAST_SHOT': {
+      const round = state.rounds.find((r) => r.id === state.activeRoundId)
+      if (!round) return state
+      return updateRound(state, round.id, (r) => ({
+        ...r,
+        holes: r.holes.map((h) => {
+          if (h.holeNumber !== action.holeNumber || !h.shots.length) return h
+          const shots = [...h.shots]
+          shots[shots.length - 1] = { ...shots[shots.length - 1], ...action.patch }
+          return { ...h, shots }
+        }),
+      }))
     }
 
     case 'END_ROUND':
@@ -182,6 +238,18 @@ function reducer(state: AppState, action: Action): AppState {
       }
     }
 
+    case 'ADD_SCORE': {
+      const entry: ScoreEntry = {
+        ...action.entry,
+        id: uid('score_'),
+        differential: scoreDifferential(action.entry.adjustedGross, action.entry.rating, action.entry.slope),
+      }
+      return { ...state, scores: [...state.scores, entry].sort((a, b) => a.date.localeCompare(b.date)) }
+    }
+
+    case 'DELETE_SCORE':
+      return { ...state, scores: state.scores.filter((s) => s.id !== action.id) }
+
     case 'RESET_DEMO':
       clearState()
       return buildSeedState()
@@ -200,7 +268,69 @@ function finishRound(state: AppState, roundId: string): AppState {
     const complete: Round = { ...r, status: 'complete' }
     return { ...complete, recap: generateRoundRecap(complete, state.profile) }
   })
-  return { ...next, activeRoundId: null }
+  const round = next.rounds.find((r) => r.id === roundId)
+  const posted = round ? postScore(next, round) : next
+  return { ...posted, activeRoundId: null }
+}
+
+/** Auto-post a WHS score entry when a round finishes with enough holes scored. */
+function postScore(state: AppState, round: Round): AppState {
+  const played = round.holes.filter((h) => h.strokes > 0)
+  if (played.length < 9) return state
+  let rating: number
+  let slope: number
+  let par: number
+  let courseName: string
+  let holeInfo: { par: number; strokes: number; handicap: number }[]
+  if (round.mode === 'gps' && round.rating && round.slope) {
+    rating = round.rating
+    slope = round.slope
+    par = round.coursePar ?? played.reduce((s, h) => s + h.par, 0)
+    courseName = round.courseName ?? 'Course'
+    holeInfo = played.map((h) => ({
+      par: h.par,
+      strokes: h.strokes,
+      handicap: round.holeMeta?.find((m) => m.number === h.holeNumber)?.handicap ?? 9,
+    }))
+  } else {
+    const c = getCourse(round.courseId)
+    rating = c.rating
+    slope = c.slope
+    par = c.holes.reduce((s, h) => s + h.par, 0)
+    courseName = c.name
+    holeInfo = played.map((h) => ({
+      par: h.par,
+      strokes: h.strokes,
+      handicap: c.holes.find((x) => x.number === h.holeNumber)?.handicap ?? 9,
+    }))
+  }
+  const ch = courseHandicap(state.profile.handicap, slope, rating, par)
+  const ags = adjustedGrossScore(holeInfo, Math.max(0, ch))
+  const entry: ScoreEntry = {
+    id: uid('score_'),
+    date: round.date,
+    courseName,
+    adjustedGross: ags,
+    rating,
+    slope,
+    par,
+    holes: played.length >= 14 ? 18 : 9,
+    differential: scoreDifferential(ags, rating, slope),
+    roundId: round.id,
+  }
+  return { ...state, scores: [...state.scores, entry].sort((a, b) => a.date.localeCompare(b.date)) }
+}
+
+function weatherToConditions(w: WeatherSnapshot | null): Conditions {
+  return {
+    windSpeed: w?.windMph ?? 0,
+    windDir: 'calm', // direction handled per-shot by the geo caddie
+    elevationFt: 0,
+    tempF: w?.tempF ?? 72,
+    firmness: 'normal',
+    wet: (w?.precipMmHr ?? 0) > 0.2,
+    slope: 'flat',
+  }
 }
 
 // ── Context ─────────────────────────────────────────────────────────────

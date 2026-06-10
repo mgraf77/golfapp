@@ -2,9 +2,11 @@ import type {
   AppState, Conditions, Contact, FeedbackTag, HoleResult, Line, LoggedShot, Outcome,
   PlayerProfile, RangeSession, RangeShot, Round, ShotInput, ShotShape,
 } from '../types'
+import type { ScoreEntry } from '../types/geo'
 import { defaultBag, getClub } from './clubs'
-import { COURSES } from './courses'
+import { COURSES, getCourse } from './courses'
 import { generateRangeSummary, generateRoundRecap, generateShotFeedback } from '../lib/aiCoach'
+import { scoreDifferential } from '../lib/handicap'
 import { normalizeShot } from '../lib/shotNormalization'
 import { daysAgo, uid } from '../lib/utils'
 
@@ -220,16 +222,36 @@ function wedgeSession(daysBack: number): RangeSession {
 
 // ── Public API ──────────────────────────────────────────────────────────
 
+function scoreFromRound(r: Round): ScoreEntry {
+  const c = getCourse(r.courseId)
+  const par = c.holes.reduce((s, h) => s + h.par, 0)
+  const gross = r.holes.reduce((s, h) => s + h.strokes, 0)
+  return {
+    id: uid('score_'),
+    date: r.date,
+    courseName: c.name,
+    adjustedGross: gross,
+    rating: c.rating,
+    slope: c.slope,
+    par,
+    holes: 18,
+    differential: scoreDifferential(gross, c.rating, c.slope),
+    roundId: r.id,
+  }
+}
+
 export function buildSeedState(profile?: Partial<PlayerProfile>): AppState {
   s = 42 // reset RNG for deterministic data
+  const rounds = [makeRound(0, 21, false), makeRound(1, 12, true), makeRound(0, 4, false)]
   return {
-    version: 1,
+    version: 2,
     onboarded: false,
     profile: { ...SEED_PROFILE, ...profile },
     bag: defaultBag(),
-    rounds: [makeRound(0, 21, false), makeRound(1, 12, true), makeRound(0, 4, false)],
+    rounds,
     rangeSessions: [sliceSession(9), wedgeSession(2)],
     activeRoundId: null,
     activeRangeId: null,
+    scores: rounds.map(scoreFromRound),
   }
 }
