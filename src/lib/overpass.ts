@@ -17,19 +17,26 @@ const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.osm.jp/api/interpreter',
 ]
 
 const ATTRIBUTION = 'Course data © OpenStreetMap contributors (ODbL)'
 
-async function overpass(query: string): Promise<any> {
+function fetchTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
+  const ctl = new AbortController()
+  const timer = setTimeout(() => ctl.abort(), ms)
+  return fetch(url, { ...init, signal: ctl.signal }).finally(() => clearTimeout(timer))
+}
+
+async function overpass(query: string, timeoutMs = 20000): Promise<any> {
   let lastErr: Error | null = null
   for (const ep of OVERPASS_ENDPOINTS) {
     try {
-      const res = await fetch(ep, {
+      const res = await fetchTimeout(ep, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'data=' + encodeURIComponent(query),
-      })
+      }, timeoutMs)
       if (!res.ok) throw new Error(`Overpass ${res.status}`)
       return await res.json()
     } catch (e) {
@@ -42,15 +49,22 @@ async function overpass(query: string): Promise<any> {
 // ── Search ──────────────────────────────────────────────────────────────
 
 export async function searchCoursesNearby(at: LatLng, radiusKm = 40): Promise<CourseSearchResult[]> {
-  const q = `[out:json][timeout:25];
+  const q = `[out:json][timeout:15];
 (
   way["leisure"="golf_course"](around:${radiusKm * 1000},${at.lat},${at.lng});
   relation["leisure"="golf_course"](around:${radiusKm * 1000},${at.lat},${at.lng});
 );
 out center tags;`
-  const data = await overpass(q)
+  let elements: any[] = []
+  try {
+    const data = await overpass(q, 18000)
+    elements = data.elements ?? []
+  } catch {
+    // every Overpass mirror failed — fall back to Nominatim bounded search
+    return nominatimNearby(at, radiusKm)
+  }
   const results: CourseSearchResult[] = []
-  for (const el of data.elements ?? []) {
+  for (const el of elements) {
     const c = el.center ?? (el.lat != null ? { lat: el.lat, lon: el.lon } : null)
     if (!c || !el.tags?.name) continue
     const center = { lat: c.lat, lng: c.lon }
@@ -67,9 +81,33 @@ out center tags;`
   return dedupe(results).sort((a, b) => (a.distanceMi ?? 0) - (b.distanceMi ?? 0))
 }
 
+async function nominatimNearby(at: LatLng, radiusKm: number): Promise<CourseSearchResult[]> {
+  const d = radiusKm / 111 // ° per km approx
+  const viewbox = `${at.lng - d},${at.lat + d},${at.lng + d},${at.lat - d}`
+  const url =
+    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=20&bounded=1` +
+    `&viewbox=${viewbox}&q=${encodeURIComponent('golf course')}`
+  const res = await fetchTimeout(url, { headers: { Accept: 'application/json' } }, 15000)
+  if (!res.ok) throw new Error('Course search is busy right now — try again in a minute.')
+  const items = (await res.json()) as any[]
+  return dedupe(
+    items
+      .filter((i) => i.osm_type === 'way' || i.osm_type === 'relation')
+      .map((i) => ({
+        id: `osm-${i.osm_type}-${i.osm_id}`,
+        osmType: i.osm_type as 'way' | 'relation',
+        osmId: Number(i.osm_id),
+        name: String(i.display_name).split(',')[0],
+        location: String(i.display_name).split(',').slice(1, 3).join(',').trim(),
+        center: { lat: Number(i.lat), lng: Number(i.lon) },
+        distanceMi: distM(at, { lat: Number(i.lat), lng: Number(i.lon) }) / 1609.34,
+      })),
+  ).sort((a, b) => (a.distanceMi ?? 0) - (b.distanceMi ?? 0))
+}
+
 export async function searchCoursesByName(name: string): Promise<CourseSearchResult[]> {
   const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=12&q=${encodeURIComponent(name + ' golf')}`
-  const res = await fetch(url, { headers: { Accept: 'application/json' } })
+  const res = await fetchTimeout(url, { headers: { Accept: 'application/json' } }, 15000)
   if (!res.ok) throw new Error(`Search failed (${res.status})`)
   const items = (await res.json()) as any[]
   return dedupe(

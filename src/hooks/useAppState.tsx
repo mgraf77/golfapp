@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react'
 import type {
   AppState, BagClub, ClubId, Conditions, HoleResult, LoggedShot, PlayerProfile,
   RangeGoal, RangeSession, RangeShot, Round, ShotInput,
@@ -9,6 +9,7 @@ import { getCourse } from '../data/courses'
 import {
   generateRangeShotFeedback, generateRangeSummary, generateRoundRecap, generateShotFeedback,
 } from '../lib/aiCoach'
+import { onAuthChange, pullState, schedulePush, type CloudUser } from '../lib/cloud'
 import { adjustedGrossScore, courseHandicap, scoreDifferential } from '../lib/handicap'
 import { normalizeShot } from '../lib/shotNormalization'
 import { clearState, loadState, saveState } from '../lib/storage'
@@ -31,6 +32,7 @@ type Action =
   | { type: 'END_RANGE' }
   | { type: 'ADD_SCORE'; entry: Omit<ScoreEntry, 'id' | 'differential'> }
   | { type: 'DELETE_SCORE'; id: string }
+  | { type: 'HYDRATE'; state: AppState }
   | { type: 'RESET_DEMO' }
 
 function reducer(state: AppState, action: Action): AppState {
@@ -250,6 +252,9 @@ function reducer(state: AppState, action: Action): AppState {
     case 'DELETE_SCORE':
       return { ...state, scores: state.scores.filter((s) => s.id !== action.id) }
 
+    case 'HYDRATE':
+      return { ...action.state, version: 2, scores: action.state.scores ?? [] }
+
     case 'RESET_DEMO':
       clearState()
       return buildSeedState()
@@ -335,21 +340,50 @@ function weatherToConditions(w: WeatherSnapshot | null): Conditions {
 
 // ── Context ─────────────────────────────────────────────────────────────
 
+export type SyncStatus = 'local' | 'syncing' | 'synced' | 'error'
+
 interface Ctx {
   state: AppState
   dispatch: React.Dispatch<Action>
+  cloudUser: CloudUser | null
+  syncStatus: SyncStatus
 }
 
 const AppStateContext = createContext<Ctx | null>(null)
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, () => loadState() ?? buildSeedState())
+  const [cloudUser, setCloudUser] = useState<CloudUser | null>(null)
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('local')
+
+  // cloud session: on sign-in, the cloud copy (if any) becomes the truth
+  useEffect(() => {
+    return onAuthChange(async (user) => {
+      setCloudUser(user)
+      if (!user) {
+        setSyncStatus('local')
+        return
+      }
+      setSyncStatus('syncing')
+      try {
+        const cloud = await pullState()
+        if (cloud?.state?.profile) dispatch({ type: 'HYDRATE', state: cloud.state })
+        setSyncStatus('synced')
+      } catch {
+        setSyncStatus('error')
+      }
+    })
+  }, [])
 
   useEffect(() => {
     saveState(state)
-  }, [state])
+    if (cloudUser) {
+      setSyncStatus('syncing')
+      schedulePush(state, cloudUser.id, (ok) => setSyncStatus(ok ? 'synced' : 'error'))
+    }
+  }, [state, cloudUser])
 
-  const value = useMemo(() => ({ state, dispatch }), [state])
+  const value = useMemo(() => ({ state, dispatch, cloudUser, syncStatus }), [state, cloudUser, syncStatus])
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>
 }
 

@@ -174,6 +174,37 @@ export function watchPosition(onFix: (fix: GpsFix) => void, onError?: (msg: stri
   return () => navigator.geolocation.clearWatch(id)
 }
 
+/**
+ * Best-effort location for course search: quick GPS attempt, then IP
+ * geolocation fallback so the nearby list works even with location
+ * permission denied or on desktop.
+ */
+export async function getApproxLocation(): Promise<{ at: LatLng; source: 'gps' | 'ip' }> {
+  try {
+    const fix = await new Promise<GpsFix>((resolve, reject) => {
+      if (!('geolocation' in navigator)) return reject(new Error('no geo'))
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracyM: pos.coords.accuracy,
+          heading: pos.coords.heading,
+          ts: pos.timestamp,
+        }),
+        (err) => reject(new Error(err.message)),
+        { enableHighAccuracy: false, maximumAge: 5 * 60 * 1000, timeout: 8000 },
+      )
+    })
+    return { at: fix, source: 'gps' }
+  } catch {
+    const res = await fetch('https://ipwho.is/')
+    if (!res.ok) throw new Error('Could not determine your location.')
+    const data = await res.json()
+    if (!data.success || typeof data.latitude !== 'number') throw new Error('Could not determine your location.')
+    return { at: { lat: data.latitude, lng: data.longitude }, source: 'ip' }
+  }
+}
+
 export function getOnce(): Promise<GpsFix> {
   return new Promise((resolve, reject) => {
     if (!('geolocation' in navigator)) return reject(new Error('GPS not available'))

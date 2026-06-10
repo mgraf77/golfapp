@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import type { ClubId, Conditions, Lie, Outcome, ShotInput } from '../../types'
 import type { GeoCourse, GeoHole, LatLng, TrackedShotStart, WeatherSnapshot } from '../../types/geo'
 import { getClub, orderedBag } from '../../data/clubs'
@@ -8,8 +8,10 @@ import { courseStore } from '../../lib/idb'
 import { computeClubStats } from '../../lib/insights'
 import { mapLie } from '../../lib/strokesGained'
 import { fetchWeather } from '../../lib/weather'
+import { speak, setVoiceEnabled, voiceAvailable, voiceEnabled } from '../../lib/voice'
 import { useActiveRound, useAppState } from '../../hooks/useAppState'
 import { ARCaddie } from '../../components/ARCaddie'
+import { GreenReader } from '../../components/GreenReader'
 import { Badge, Button, Card, Chip, Sheet } from '../../components/ui'
 
 // Leaflet is browser-only and heavy — split it out of the main bundle.
@@ -35,9 +37,9 @@ export function GpsRound() {
   const [club, setClub] = useState<ClubId | null>(null)
   const [lie, setLie] = useState<string>('tee')
   const [tracking, setTracking] = useState<TrackedShotStart | null>(null)
-  const [putts, setPutts] = useState(2)
   const [manualStrokes, setManualStrokes] = useState(4)
-  const [sheet, setSheet] = useState<'none' | 'result' | 'score' | 'ar' | 'caddie'>('none')
+  const [sheet, setSheet] = useState<'none' | 'score' | 'ar' | 'caddie' | 'green'>('none')
+  const [voice, setVoice] = useState(voiceEnabled())
 
   // course file
   useEffect(() => {
@@ -76,7 +78,6 @@ export function GpsRound() {
     setClub(null)
     setLie('tee')
     setTracking(null)
-    setPutts(2)
     setManualStrokes(hole.par)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [holeKey])
@@ -184,6 +185,35 @@ export function GpsRound() {
 
   const walked = tracking && fix ? Math.round(distYds(tracking.start, fix)) : 0
 
+  // voice caddie: announce the plan once per hole when enabled
+  const spokenRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (!voice || !advice || !hole) return
+    if (spokenRef.current === hole.number) return
+    spokenRef.current = hole.number
+    speak(
+      `Hole ${hole.number}, par ${hole.par}. ${getClub(advice.best.clubId).label}, ${advice.best.label}. Plays ${advice.playsLike.playsLike}.`,
+    )
+  }, [voice, advice, hole])
+
+  function toggleVoice() {
+    const next = !voice
+    setVoice(next)
+    setVoiceEnabled(next)
+    if (next && advice && hole) {
+      spokenRef.current = hole.number
+      speak(`Voice caddie on. ${getClub(advice.best.clubId).label}, ${advice.best.label}. Plays ${advice.playsLike.playsLike}.`, { force: true })
+    }
+  }
+
+  function saveHole(putts: number) {
+    dispatch({
+      type: 'FINISH_HOLE',
+      putts,
+      strokesOverride: shotsTaken === 0 ? manualStrokes : undefined,
+    })
+  }
+
   return (
     <div className="animate-rise -mt-1">
       {/* hole header */}
@@ -277,9 +307,20 @@ export function GpsRound() {
                 </div>
               </div>
             </div>
-            <Badge tone={advice.riskLevel < 30 ? 'good' : advice.riskLevel < 60 ? 'gold' : 'bad'}>
-              {advice.riskLevel < 30 ? 'Green light' : advice.riskLevel < 60 ? 'Managed' : 'Danger'}
-            </Badge>
+            <div className="flex items-center gap-1.5">
+              {voiceAvailable() && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleVoice() }}
+                  aria-label="Voice caddie"
+                  className={`h-8 w-8 rounded-lg border flex items-center justify-center text-sm ${voice ? 'bg-accent text-[#04130d] border-accent' : 'bg-surface-2 border-line text-muted'}`}
+                >
+                  {voice ? '🔊' : '🔇'}
+                </button>
+              )}
+              <Badge tone={advice.riskLevel < 30 ? 'good' : advice.riskLevel < 60 ? 'gold' : 'bad'}>
+                {advice.riskLevel < 30 ? 'Green light' : advice.riskLevel < 60 ? 'Managed' : 'Danger'}
+              </Badge>
+            </div>
           </div>
           <p className="text-[13px] text-muted mt-2 leading-relaxed">{advice.rationale[advice.rationale.length > 1 ? 1 : 0] ?? ''} <span className="text-accent-bright">Tap for full read →</span></p>
         </Card>
@@ -296,11 +337,12 @@ export function GpsRound() {
 
       {/* tracking / actions */}
       {!tracking ? (
-        <div className="grid grid-cols-[1fr_auto_auto] gap-2 mt-2.5">
+        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 mt-2.5">
           <Button size="lg" onClick={startTracking} disabled={!pos}>
-            🎯 Track {getClub(activeClubId).short} shot
+            🎯 Track {getClub(activeClubId).short}
           </Button>
           <Button size="lg" variant="secondary" onClick={() => setSheet('ar')}>AR</Button>
+          <Button size="lg" variant="secondary" onClick={() => setSheet('green')}>🟢</Button>
           <Button size="lg" variant="secondary" onClick={() => setSheet('score')}>Card</Button>
         </div>
       ) : (
@@ -309,58 +351,73 @@ export function GpsRound() {
             <div>
               <div className="font-semibold text-sm">Tracking {getClub(tracking.clubId as ClubId).label}</div>
               <div className="text-xs text-muted mt-0.5">
-                {fix ? `Walked ${walked} yds from the strike point` : 'Walk to your ball, then mark it'}
+                {fix ? `Walked ${walked} yds — at your ball, tap where it ended up` : 'Walk to your ball, then tap where it ended up'}
               </div>
             </div>
             <button onClick={() => setTracking(null)} className="text-faint text-xs px-2">Cancel</button>
           </div>
-          <Button size="lg" className="w-full mt-3" onClick={() => setSheet('result')}>
-            ⛳ Ball is here{fix && walked > 10 ? ` (${walked} yds)` : ''}
-          </Button>
+          <div className="grid grid-cols-3 gap-1.5 mt-3">
+            {([
+              ['Fairway', 'fairway', 'fairway'],
+              ['Green 🎯', 'green', 'green'],
+              ['Rough', 'rough', 'rough'],
+              ['Bunker', 'bunker', 'bunker'],
+              ['Fringe', 'fringe', 'fringe'],
+              ['Deep 🌲', 'rough', 'deep-rough'],
+              ['Water +1', 'water', null],
+              ['OB +1', 'ob', null],
+              ['Holed! 🕳', 'holed', null],
+            ] as [string, Outcome, string | null][]).map(([label, outcome, endLie]) => (
+              <button
+                key={label}
+                onClick={() => logTrackedShot(outcome, endLie)}
+                className={`rounded-xl border py-2.5 text-[13px] font-semibold active:scale-95 transition-transform ${
+                  outcome === 'holed' ? 'bg-accent text-[#04130d] border-accent' :
+                  outcome === 'water' || outcome === 'ob' ? 'bg-surface-2 border-danger/40 text-danger' :
+                  'bg-surface-2 border-line text-ink'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </Card>
       )}
 
-      {/* hole score */}
+      {/* one-tap hole finish */}
       <Card className="mt-2.5">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold">Hole {hole.number} · {shotsTaken} shot{shotsTaken === 1 ? '' : 's'} logged</div>
-            <div className="text-xs text-muted mt-0.5">
-              {shotsTaken > 0 ? 'Putts + tracked shots = your score' : 'No shots tracked — set the total below'}
-            </div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm font-semibold">
+            {shotsTaken > 0
+              ? `${shotsTaken} shot${shotsTaken === 1 ? '' : 's'}${(holeResult?.penalties ?? 0) > 0 ? ` +${holeResult!.penalties} pen` : ''} — tap putts to save`
+              : 'Quick score — strokes, then tap putts to save'}
           </div>
-          <div className="flex items-center gap-2.5">
-            <button onClick={() => setPutts(Math.max(0, putts - 1))} className="h-9 w-9 rounded-lg bg-surface-2 border border-line text-lg">−</button>
-            <div className="text-center w-10">
-              <div className="text-lg font-bold tabular-nums leading-none">{putts}</div>
-              <div className="text-[9px] uppercase text-faint">putts</div>
-            </div>
-            <button onClick={() => setPutts(putts + 1)} className="h-9 w-9 rounded-lg bg-surface-2 border border-line text-lg">+</button>
-          </div>
+          {holeIdx >= course.holes.length - 1 && <Badge tone="gold">Final hole</Badge>}
         </div>
         {shotsTaken === 0 && (
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-line/60">
+          <div className="flex items-center justify-between mb-2.5">
             <span className="text-sm text-muted">Total strokes</span>
             <div className="flex items-center gap-2.5">
-              <button onClick={() => setManualStrokes(Math.max(1, manualStrokes - 1))} className="h-9 w-9 rounded-lg bg-surface-2 border border-line text-lg">−</button>
+              <button onClick={() => setManualStrokes(Math.max(1, manualStrokes - 1))} className="h-10 w-10 rounded-lg bg-surface-2 border border-line text-lg">−</button>
               <span className="w-8 text-center text-lg font-bold tabular-nums">{manualStrokes}</span>
-              <button onClick={() => setManualStrokes(manualStrokes + 1)} className="h-9 w-9 rounded-lg bg-surface-2 border border-line text-lg">+</button>
+              <button onClick={() => setManualStrokes(manualStrokes + 1)} className="h-10 w-10 rounded-lg bg-surface-2 border border-line text-lg">+</button>
             </div>
           </div>
         )}
-        <Button
-          variant="secondary"
-          className="w-full mt-3"
-          onClick={() =>
-            dispatch({
-              type: 'FINISH_HOLE',
-              putts: Math.min(putts, shotsTaken === 0 ? manualStrokes : putts),
-              strokesOverride: shotsTaken === 0 ? manualStrokes : undefined,
-            })
-          }
-        >
-          Save hole {hole.number} ({shotsTaken === 0 ? manualStrokes : shotsTaken + (holeResult?.penalties ?? 0) + putts} strokes) {holeIdx >= course.holes.length - 1 ? '· finish round' : '→'}
-        </Button>
+        <div className="grid grid-cols-6 gap-1.5">
+          {[0, 1, 2, 3, 4, 5].map((p) => (
+            <button
+              key={p}
+              onClick={() => saveHole(p)}
+              className={`rounded-xl border py-3 font-bold tabular-nums active:scale-95 transition-transform ${p === 2 ? 'bg-accent/15 border-accent/50 text-accent-bright' : 'bg-surface-2 border-line text-ink'}`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        <div className="text-[11px] text-faint mt-1.5 text-center">
+          putts — saves hole {hole.number} ({shotsTaken === 0 ? `${manualStrokes} total` : `${shotsTaken + (holeResult?.penalties ?? 0)} + putts`}) and moves on
+        </div>
       </Card>
 
       <div className="mt-3 text-center">
@@ -374,27 +431,7 @@ export function GpsRound() {
       </div>
 
       {/* ── sheets ── */}
-      <Sheet open={sheet === 'result'} onClose={() => setSheet('none')} title="Where did it end up?">
-        <div className="grid grid-cols-2 gap-2 pb-2">
-          {([
-            ['Fairway ✅', 'fairway', 'fairway'],
-            ['Green 🎯', 'green', 'green'],
-            ['Rough', 'rough', 'rough'],
-            ['Fringe', 'fringe', 'fringe'],
-            ['Bunker 🏖', 'bunker', 'bunker'],
-            ['Deep trouble', 'rough', 'deep-rough'],
-            ['Water 💧 (+1)', 'water', null],
-            ['OB (+1)', 'ob', null],
-          ] as [string, Outcome, string | null][]).map(([label, outcome, endLie]) => (
-            <Button key={label} variant="secondary" onClick={() => logTrackedShot(outcome, endLie)}>
-              {label}
-            </Button>
-          ))}
-          <Button className="col-span-2" onClick={() => logTrackedShot('holed', null)}>
-            🕳️ Holed it!
-          </Button>
-        </div>
-      </Sheet>
+      <GreenReader open={sheet === 'green'} onClose={() => setSheet('none')} />
 
       <Sheet open={sheet === 'caddie'} onClose={() => setSheet('none')} title="Caddie read">
         {advice && <CaddieDetail advice={advice} />}

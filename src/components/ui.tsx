@@ -157,7 +157,7 @@ export function Sheet({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
       <div className="absolute inset-0 bg-black/70 animate-fade" onClick={onClose} />
-      <div className="relative w-full max-w-md max-h-[88dvh] overflow-y-auto rounded-t-3xl border-t border-x border-line bg-surface animate-rise pb-[max(env(safe-area-inset-bottom),16px)]">
+      <div className="relative w-full max-w-md md:max-w-xl max-h-[88dvh] overflow-y-auto rounded-t-3xl border-t border-x border-line bg-surface animate-rise pb-[max(env(safe-area-inset-bottom),16px)]">
         <div className="sticky top-0 z-10 bg-surface pt-3 pb-2 px-5 border-b border-line/60">
           <div className="mx-auto mb-2.5 h-1 w-10 rounded-full bg-surface-3" />
           <div className="flex items-center justify-between">

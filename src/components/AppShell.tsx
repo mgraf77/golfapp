@@ -6,7 +6,7 @@ export function AppShell({
   tab, onTabChange, children, title, subtitle,
 }: { tab: Tab; onTabChange: (t: Tab) => void; children: ReactNode; title: string; subtitle?: string }) {
   return (
-    <div className="mx-auto min-h-dvh w-full max-w-md">
+    <div className="mx-auto min-h-dvh w-full max-w-md md:max-w-xl lg:max-w-2xl">
       <header className="sticky top-0 z-30 border-b border-line/60 bg-bg/85 backdrop-blur-lg px-5 pt-[max(env(safe-area-inset-top),12px)] pb-3">
         <div className="flex items-end justify-between">
           <div>

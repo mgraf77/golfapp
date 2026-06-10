@@ -54,7 +54,7 @@ const TABS: { id: Tab; label: string; icon: (active: boolean) => React.ReactNode
 
 export function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
   return (
-    <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-md -translate-x-1/2 border-t border-line bg-bg/90 backdrop-blur-lg pb-[max(env(safe-area-inset-bottom),8px)]">
+    <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-md md:max-w-xl lg:max-w-2xl -translate-x-1/2 border-t border-line bg-bg/90 backdrop-blur-lg pb-[max(env(safe-area-inset-bottom),8px)]">
       <div className="flex">
         {TABS.map((t) => {
           const active = tab === t.id

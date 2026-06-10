@@ -2,9 +2,12 @@ import { useState } from 'react'
 import type { Lesson } from '../data/lessons'
 import { DRILLS } from '../data/drills'
 import { LESSON_CATEGORIES, LESSONS } from '../data/lessons'
+import { getStoryboard, hasCustomVideo } from '../lib/storyboards'
 import { useActiveRange } from '../hooks/useAppState'
 import { DrillCard } from '../components/DrillCard'
-import { Badge, Card, SectionTitle, Segmented, Sheet } from '../components/ui'
+import { GreenReader } from '../components/GreenReader'
+import { LessonVideo } from '../components/LessonVideo'
+import { Badge, Button, Card, SectionTitle, Segmented, Sheet } from '../components/ui'
 import { Range } from './Range'
 
 /**
@@ -68,9 +71,35 @@ function DrillLibrary() {
 function LessonLibrary() {
   const [cat, setCat] = useState<string>('all')
   const [open, setOpen] = useState<Lesson | null>(null)
+  const [video, setVideo] = useState<Lesson | null>(null)
+  const [greens, setGreens] = useState(false)
   const list = LESSONS.filter((l) => cat === 'all' || l.category === cat)
+  const featured = LESSONS.filter((l) => hasCustomVideo(l.id))
   return (
     <div>
+      {/* AI video rail */}
+      {cat === 'all' && (
+        <>
+          <div className="flex items-center justify-between mb-2 px-0.5">
+            <span className="text-[13px] font-semibold uppercase tracking-[0.12em] text-muted">🎬 AI video lessons</span>
+            <button onClick={() => setGreens(true)} className="text-[13px] font-semibold text-accent-bright">🟢 Green reading</button>
+          </div>
+          <div className="flex gap-2.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1 mb-2">
+            {featured.map((l) => (
+              <button
+                key={l.id}
+                onClick={() => setVideo(l)}
+                className="shrink-0 w-40 rounded-2xl border border-line bg-surface text-left p-3 active:scale-[0.97] transition-transform"
+              >
+                <div className="h-9 w-9 rounded-full bg-accent text-[#04130d] flex items-center justify-center font-bold pl-0.5 mb-2">▶</div>
+                <div className="text-[13px] font-semibold leading-snug">{l.title.split(':')[0]}</div>
+                <div className="text-[11px] text-faint mt-1">Narrated · generated on-device</div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       <div className="flex gap-1.5 overflow-x-auto no-scrollbar mb-3 -mx-1 px-1">
         <button
           onClick={() => setCat('all')}
@@ -98,21 +127,38 @@ function LessonLibrary() {
               </Badge>
             </div>
             <p className="text-[13px] text-muted mt-1 leading-relaxed">{l.summary}</p>
-            <div className="text-[11px] text-faint mt-1.5">{l.minutes} min read</div>
+            <div className="flex items-center justify-between mt-1.5">
+              <span className="text-[11px] text-faint">{l.minutes} min read</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); setVideo(l) }}
+                className="text-[12px] font-semibold text-accent-bright"
+              >
+                ▶ Watch AI video
+              </button>
+            </div>
           </Card>
         ))}
       </div>
 
       <Sheet open={open !== null} onClose={() => setOpen(null)} title={open?.title}>
-        {open && <LessonView lesson={open} />}
+        {open && <LessonView lesson={open} onWatch={() => { setVideo(open); setOpen(null) }} />}
       </Sheet>
+
+      {video && (
+        <LessonVideo
+          board={getStoryboard(video.id, video.title, video.keys, video.summary)}
+          onClose={() => setVideo(null)}
+        />
+      )}
+      <GreenReader open={greens} onClose={() => setGreens(false)} />
     </div>
   )
 }
 
-function LessonView({ lesson }: { lesson: Lesson }) {
+function LessonView({ lesson, onWatch }: { lesson: Lesson; onWatch: () => void }) {
   return (
     <div className="pb-3">
+      <Button size="sm" className="mb-3" onClick={onWatch}>▶ Watch the AI video version</Button>
       <p className="text-sm text-muted leading-relaxed">{lesson.summary}</p>
 
       <div className="mt-4 rounded-xl border border-accent/25 bg-accent/5 p-3.5">
