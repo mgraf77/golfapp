@@ -104,6 +104,18 @@ function dispersionFor(
   }
 }
 
+/** Dispersion sigmas for the map ellipse (1σ, yards). */
+export function dispersionPreview(
+  clubId: ClubId,
+  bag: BagClub[],
+  stats: ClubStats[] | undefined,
+  profile: PlayerProfile,
+): { sigmaLong: number; sigmaLat: number; carry: number } {
+  const bagClub = bag.find((b) => b.clubId === clubId) ?? bag[0]
+  const d = dispersionFor(bagClub, stats, profile)
+  return { sigmaLong: d.sigmaLong, sigmaLat: d.sigmaLat, carry: d.carry }
+}
+
 // deterministic gaussian pairs so advice doesn't flicker between renders
 function seededGaussians(n: number, seed: number): { a: number; b: number }[] {
   let s = seed >>> 0 || 1

@@ -9,6 +9,8 @@ import { useActiveRound, useAppState } from '../hooks/useAppState'
 import { ARPreview } from '../components/ARPreview'
 import { FeedbackCard } from '../components/FeedbackCard'
 import { Badge, Button, Card, Chip, Field, SectionTitle, Segmented, Sheet, inputClass } from '../components/ui'
+import { PlayHub } from './play/PlayHub'
+import { GpsRound } from './play/GpsRound'
 
 const WIND_DIRS: { id: WindDir; label: string }[] = [
   { id: 'calm', label: 'Calm' },
@@ -24,12 +26,13 @@ function defaultConditions(): Conditions {
 
 export function Play() {
   const round = useActiveRound()
-  return round ? <ActiveRound /> : <PlayLobby />
+  if (round && round.mode === 'gps') return <GpsRound />
+  return round ? <ActiveRound /> : <PlayHub />
 }
 
 // ── Lobby: pick course, see history ────────────────────────────────────
 
-function PlayLobby() {
+export function PlayLobby() {
   const { state, dispatch } = useAppState()
   const [conditions, setConditions] = useState<Conditions>(defaultConditions())
   const history = [...state.rounds].filter((r) => r.status === 'complete').sort((a, b) => b.date.localeCompare(a.date))

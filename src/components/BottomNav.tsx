@@ -21,8 +21,8 @@ const TABS: { id: Tab; label: string; icon: (active: boolean) => React.ReactNode
     ),
   },
   {
-    id: 'range',
-    label: 'Range',
+    id: 'practice',
+    label: 'Practice',
     icon: (a) => (
       <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8}>
         <circle cx="12" cy="12" r="8.5" />
@@ -32,21 +32,21 @@ const TABS: { id: Tab; label: string; icon: (active: boolean) => React.ReactNode
     ),
   },
   {
+    id: 'swing',
+    label: 'Swing',
+    icon: (a) => (
+      <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8}>
+        <rect x="3" y="5" width="18" height="14" rx="2.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="m10 9.5 5 2.5-5 2.5v-5Z" />
+      </svg>
+    ),
+  },
+  {
     id: 'insights',
     label: 'Insights',
     icon: (a) => (
       <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8}>
         <path strokeLinecap="round" d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
-      </svg>
-    ),
-  },
-  {
-    id: 'profile',
-    label: 'Profile',
-    icon: (a) => (
-      <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8}>
-        <circle cx="12" cy="8" r="4" />
-        <path strokeLinecap="round" d="M4 21c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5" />
       </svg>
     ),
   },

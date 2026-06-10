@@ -4,6 +4,7 @@ import { getClub } from '../data/clubs'
 import { getCourse } from '../data/courses'
 import { getDrill } from '../data/drills'
 import { generateHomeSummary, generatePracticePlan, generateTodaysFocus } from '../lib/aiCoach'
+import { computeHandicap, fmtIndex } from '../lib/handicap'
 import {
   bestAndWorstClub, computeClubStats, computeWeaknesses, gappingWarnings, scoreTrend, trueSkillIndex,
 } from '../lib/insights'
@@ -28,7 +29,7 @@ export function Home({ onNavigate }: { onNavigate: (t: Tab) => void }) {
 
   const lastRound = [...state.rounds].filter((r) => r.status === 'complete').sort((a, b) => b.date.localeCompare(a.date))[0]
   const lastRange = [...state.rangeSessions].filter((s) => s.status === 'complete').sort((a, b) => b.date.localeCompare(a.date))[0]
-  const hcpTrend = trend.length >= 2 ? round1(state.profile.handicap - (trend[0].score - trend[trend.length - 1].score) * 0.18) : state.profile.handicap
+  const whs = useMemo(() => computeHandicap(state.scores), [state.scores])
   const confRanking = [...stats].sort((a, b) => b.confidence - a.confidence).slice(0, 5)
 
   return (
@@ -42,11 +43,29 @@ export function Home({ onNavigate }: { onNavigate: (t: Tab) => void }) {
             Built from normalized shots, club confidence, and leak severity — not vanity distances.
           </div>
           <div className="mt-2 flex items-center gap-2 text-[13px]">
-            <Badge tone="good">HCP {state.profile.handicap.toFixed(1)} → {hcpTrend.toFixed(1)}</Badge>
-            <span className="text-faint text-[11px]">projected</span>
+            <Badge tone="good">WHS Index {fmtIndex(whs.index)}</Badge>
+            <button className="text-faint text-[11px] underline underline-offset-2" onClick={() => onNavigate('insights')}>
+              {whs.total} scores →
+            </button>
           </div>
         </div>
       </Card>
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        <button onClick={() => onNavigate('play')} className="rounded-2xl border border-line bg-surface py-3 active:scale-[0.97] transition-transform">
+          <div className="text-xl">🛰️</div>
+          <div className="text-[11px] font-semibold mt-1">GPS Round</div>
+        </button>
+        <button onClick={() => onNavigate('swing')} className="rounded-2xl border border-line bg-surface py-3 active:scale-[0.97] transition-transform">
+          <div className="text-xl">🎥</div>
+          <div className="text-[11px] font-semibold mt-1">Swing Check</div>
+        </button>
+        <button onClick={() => onNavigate('practice')} className="rounded-2xl border border-line bg-surface py-3 active:scale-[0.97] transition-transform">
+          <div className="text-xl">🏌️</div>
+          <div className="text-[11px] font-semibold mt-1">Practice</div>
+        </button>
+      </div>
 
       {/* Today's focus */}
       <FeedbackCard title="Today's Focus" tone="good" className="mt-3">
@@ -136,7 +155,7 @@ export function Home({ onNavigate }: { onNavigate: (t: Tab) => void }) {
             ))}
           </div>
         )}
-        <Button size="sm" className="mt-3" onClick={() => onNavigate('range')}>
+        <Button size="sm" className="mt-3" onClick={() => onNavigate('practice')}>
           Start range session →
         </Button>
       </Card>
@@ -164,7 +183,7 @@ export function Home({ onNavigate }: { onNavigate: (t: Tab) => void }) {
           <Card onClick={() => onNavigate('play')}>
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-[14px] font-semibold">{getCourse(lastRound.courseId).name}</div>
+                <div className="text-[14px] font-semibold">{lastRound.courseName ?? getCourse(lastRound.courseId).name}</div>
                 <div className="text-[12px] text-muted">{fmtDate(lastRound.date)} · Round</div>
               </div>
               <div className="text-right">
@@ -175,7 +194,7 @@ export function Home({ onNavigate }: { onNavigate: (t: Tab) => void }) {
           </Card>
         )}
         {lastRange && (
-          <Card onClick={() => onNavigate('range')}>
+          <Card onClick={() => onNavigate('practice')}>
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-[14px] font-semibold">Range · {getDrill(lastRange.drillId).name}</div>

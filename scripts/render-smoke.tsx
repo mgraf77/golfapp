@@ -7,6 +7,8 @@ import { AppStateProvider } from '../src/hooks/useAppState'
 import { Home } from '../src/screens/Home'
 import { Play } from '../src/screens/Play'
 import { Range } from '../src/screens/Range'
+import { Practice } from '../src/screens/Practice'
+import { Swing } from '../src/screens/Swing'
 import { Insights } from '../src/screens/Insights'
 import { Profile } from '../src/screens/Profile'
 import { buildSeedState } from '../src/data/seed'
@@ -66,6 +68,8 @@ renderCase('Range active session (zero shots)', <Range />, (s) => {
   s.rangeSessions[1].shots = []
   s.activeRangeId = s.rangeSessions[1].id
 })
+renderCase('Practice hub', <Practice />)
+renderCase('Swing studio list', <Swing />)
 renderCase('Insights', <Insights />)
 renderCase('Profile', <Profile />)
 renderCase('Empty data — Home', <Home onNavigate={() => {}} />, (s) => {
