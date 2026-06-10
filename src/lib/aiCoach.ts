@@ -5,6 +5,7 @@ import { getClub } from '../data/clubs'
 import { getCourse } from '../data/courses'
 import { CONTACT_FACTORS, SHAPE_INFO } from './physicsEngine'
 import { detectMissPattern, normalizeShot } from './shotNormalization'
+import { roundStrokesGained } from './strokesGained'
 import { pct, pickSeeded } from './utils'
 
 /**
@@ -220,7 +221,7 @@ export function generateRangeSummary(shots: RangeShot[], goal: RangeGoal): { sum
 }
 
 export function generateRoundRecap(round: Round, profile: PlayerProfile): string {
-  const course = getCourse(round.courseId)
+  const courseName = round.courseName ?? getCourse(round.courseId).name
   const played = round.holes.filter((h) => h.strokes > 0)
   if (played.length === 0) return 'No holes completed.'
   const strokes = played.reduce((a, h) => a + h.strokes, 0)
@@ -232,8 +233,22 @@ export function generateRoundRecap(round: Round, profile: PlayerProfile): string
   const putts = played.reduce((a, h) => a + h.putts, 0)
 
   const parts = [
-    `${strokes} (${strokes - par >= 0 ? '+' : ''}${strokes - par}) over ${played.length} holes at ${course.name}: ${fairways}/${fwAttempts} fairways, ${girs} GIR, ${putts} putts.`,
+    `${strokes} (${strokes - par >= 0 ? '+' : ''}${strokes - par}) over ${played.length} holes at ${courseName}: ${fairways}/${fwAttempts} fairways, ${girs} GIR, ${putts} putts.`,
   ]
+  const sg = roundStrokesGained(round)
+  if (sg.shotsMeasured >= 6) {
+    const cats: [string, number][] = [
+      ['off the tee', sg.ott], ['approach', sg.app], ['around the green', sg.arg], ['putting', sg.putt],
+    ]
+    cats.sort((a, b) => a[1] - b[1])
+    const worst = cats[0]
+    const best = cats[cats.length - 1]
+    parts.push(
+      `Strokes gained: ${sg.total >= 0 ? '+' : ''}${sg.total.toFixed(1)} vs scratch — ` +
+      `${best[0]} carried you (${best[1] >= 0 ? '+' : ''}${best[1].toFixed(1)}), ` +
+      `${worst[0]} cost the most (${worst[1].toFixed(1)}).`,
+    )
+  }
   if (penalties >= 2) {
     parts.push(`${penalties} penalty strokes were the round's biggest leak — that's ${penalties} shots given away before skill even mattered.`)
   } else if (girs / played.length < 0.35) {

@@ -364,6 +364,7 @@ export async function exportTracerVideo(
   const start = Math.max(0, (tracer[0]?.t ?? 0) - 0.6)
   const end = Math.min(video.duration, (tracer[tracer.length - 1]?.t ?? video.duration) + 0.8)
   video.pause()
+  video.playbackRate = 1
   video.currentTime = start
 
   return new Promise((resolve, reject) => {

@@ -36,6 +36,7 @@ export function GpsRound() {
   const [lie, setLie] = useState<string>('tee')
   const [tracking, setTracking] = useState<TrackedShotStart | null>(null)
   const [putts, setPutts] = useState(2)
+  const [manualStrokes, setManualStrokes] = useState(4)
   const [sheet, setSheet] = useState<'none' | 'result' | 'score' | 'ar' | 'caddie'>('none')
 
   // course file
@@ -76,6 +77,7 @@ export function GpsRound() {
     setLie('tee')
     setTracking(null)
     setPutts(2)
+    setManualStrokes(hole.par)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [holeKey])
 
@@ -323,7 +325,9 @@ export function GpsRound() {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold">Hole {hole.number} · {shotsTaken} shot{shotsTaken === 1 ? '' : 's'} logged</div>
-            <div className="text-xs text-muted mt-0.5">Putts + tracked shots = your score</div>
+            <div className="text-xs text-muted mt-0.5">
+              {shotsTaken > 0 ? 'Putts + tracked shots = your score' : 'No shots tracked — set the total below'}
+            </div>
           </div>
           <div className="flex items-center gap-2.5">
             <button onClick={() => setPutts(Math.max(0, putts - 1))} className="h-9 w-9 rounded-lg bg-surface-2 border border-line text-lg">−</button>
@@ -334,8 +338,28 @@ export function GpsRound() {
             <button onClick={() => setPutts(putts + 1)} className="h-9 w-9 rounded-lg bg-surface-2 border border-line text-lg">+</button>
           </div>
         </div>
-        <Button variant="secondary" className="w-full mt-3" onClick={() => dispatch({ type: 'FINISH_HOLE', putts })}>
-          Save hole {hole.number} ({shotsTaken + (holeResult?.penalties ?? 0) + putts} strokes) {holeIdx >= course.holes.length - 1 ? '· finish round' : '→'}
+        {shotsTaken === 0 && (
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-line/60">
+            <span className="text-sm text-muted">Total strokes</span>
+            <div className="flex items-center gap-2.5">
+              <button onClick={() => setManualStrokes(Math.max(1, manualStrokes - 1))} className="h-9 w-9 rounded-lg bg-surface-2 border border-line text-lg">−</button>
+              <span className="w-8 text-center text-lg font-bold tabular-nums">{manualStrokes}</span>
+              <button onClick={() => setManualStrokes(manualStrokes + 1)} className="h-9 w-9 rounded-lg bg-surface-2 border border-line text-lg">+</button>
+            </div>
+          </div>
+        )}
+        <Button
+          variant="secondary"
+          className="w-full mt-3"
+          onClick={() =>
+            dispatch({
+              type: 'FINISH_HOLE',
+              putts: Math.min(putts, shotsTaken === 0 ? manualStrokes : putts),
+              strokesOverride: shotsTaken === 0 ? manualStrokes : undefined,
+            })
+          }
+        >
+          Save hole {hole.number} ({shotsTaken === 0 ? manualStrokes : shotsTaken + (holeResult?.penalties ?? 0) + putts} strokes) {holeIdx >= course.holes.length - 1 ? '· finish round' : '→'}
         </Button>
       </Card>
 

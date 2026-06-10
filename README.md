@@ -1,74 +1,98 @@
-# TrueCaddie — Golf Intelligence PWA
+# TrueCaddie — Golf Intelligence
 
-**Know your real game.** TrueCaddie is a working prototype of an AI golf performance system: an on-course
-AI caddie, a range coach that makes practice actually transfer, and a shot-intelligence engine that
-converts raw shots into *normalized, true* performance numbers.
+An all-in-one golf app: GPS rangefinder, AI caddie, shot tracker, swing
+studio, handicap engine and practice coach in a single installable PWA.
+No accounts, no API keys, no subscription — everything runs on your phone.
 
-The core thesis: a 300-yard drive downhill, downwind, on firm turf is **not** a 300-yard driver swing —
-and every recommendation in the app is built on the neutral number, not the flattering one.
+**Live:** https://golfapp-mu.vercel.app
 
-## Run it
+## What it does
 
-```bash
-npm install
-npm run dev      # http://localhost:5173
-npm run build    # type-check + production build
-npm run smoke    # engine + render smoke tests (no browser needed)
-npm run preview  # serve the production build
-```
+### 🛰 GPS rounds on real courses
+- Search any real course (by name or near you) and **download it** —
+  full hole geometry from OpenStreetMap: centerlines, greens, bunkers,
+  water. Stored in IndexedDB, works offline (Arccos-style course files).
+- **Satellite hole view** (Esri World Imagery) with live GPS position,
+  front/center/back distances, draggable pin, tap-anywhere targets and
+  carry/remaining measurements.
+- **Auto-scorecard**: par, yardage and stroke index per hole from course
+  data (estimated from geometry where untagged).
+- Walk-it-off **shot tracking**: mark the strike, walk to the ball, tag
+  the result — distance, lie and strokes-gained anchors are captured
+  automatically. Auto hole-advance suggestions at the next tee.
 
-Open on a phone (or in devtools mobile viewport) — the app is mobile-first, dark-mode, and installable
-as a PWA (manifest + service worker + offline app shell).
+### 🧠 The caddie
+- **Live weather** (Open-Meteo): wind decomposed onto your exact shot
+  bearing, temperature effects → honest *plays-like* numbers.
+- **Expected-value targeting**: your dispersion ellipse (from your real
+  logged shots) is Monte-Carlo sampled against the actual course
+  polygons. The caddie recommends the lowest expected-strokes play and
+  prices the aggressive line honestly next to it.
+- **AR aim mode**: rear camera + compass — rotate until the line
+  centers, see F/C/B and the club. Built as an isolated overlay layer
+  (glasses-ready).
 
-## What's inside
+### 🎥 Swing Studio
+- Record or import swings; slow-mo (0.1×–1×), frame stepping, coach ink
+  (lines / circles / freehand).
+- **On-device AI analysis** (MediaPipe pose, loaded on demand): tempo
+  ratio vs the 3:1 benchmark, hip sway, head drift, early extension,
+  shoulder turn — each fault mapped to a fix cue and prescribed drills.
+- **Ball-flight tracer** (ShotTracer-style): tap the ball at a few
+  frames, get an animated comet path, export it as a shareable clip.
 
-| Area | What it does |
-| --- | --- |
-| **Onboarding** | Progressive cards: handicap, goals, common miss, shot shape, full bag with editable stock yardages. Skippable into seeded demo data. |
-| **Home** | True Skill Index, top-3 weaknesses with strokes/round costs, club confidence ranking, AI summary, today's focus, practice plan generator, gapping warnings, install card. |
-| **Play** | Course select (2 seeded courses, 9 believable holes each) with weather/condition controls → full simulated round: per-hole caddie advice (club, target, risk meter, safe vs aggressive strokes-gained tradeoff), shot entry (club/contact/shape/lie/wind/elevation/slope/outcome), AI feedback + normalization breakdown per shot, scoring, round recap. |
-| **XR Caddie View** | Simulated AR overlay standing behind the ball: perspective hole render with fairway, hazards, bunkers, OB stakes, distance arcs, flight line, landing zones, wind/elevation HUD, and four target modes (Safe / Aggressive / Practice / Miss-Avoid). |
-| **Range** | Goal → club(s) → recommended drill → fast shot logging (3×3 landing grid + 20+ one-tap feedback tags) → per-rep coaching with pattern detection ("4 of 6 short-right, confidence rising…") → live dispersion plot, practice score, session summary. |
-| **Drill engine** | 12 fully specified drills (objective, setup, reps, scoring, tracking, success criteria, coaching cue, progression), scored against goal + miss pattern. |
-| **Insights** | Raw vs normalized distances per club, confidence, dispersion, miss tendencies, strokes lost by category, score & practice trends, best/worst club, gapping analysis — all SVG charts, no chart lib. |
-| **Profile / Bag** | Player model editing, full bag table (carry/total/true/confidence), per-club detail sheets, JSON export, demo reset. |
+### 📊 Scoring engine
+- **True WHS handicap**: score differentials, best-8-of-20 with
+  small-sample tables, soft/hard caps, net double bogey, course
+  handicap. Rounds auto-post; manual scores supported.
+- **Strokes gained** (Broadie baselines) per category — off the tee,
+  approach, around the green, putting — exact for GPS-tracked rounds,
+  estimated for card rounds. Round recaps say where the strokes
+  actually went.
 
-## Architecture
+### 🏌️ Practice
+- Range coach with goal-based sessions, drill prescriptions, live
+  pattern feedback and practice scores.
+- 19-drill library (including the swing-fault prescriptions) and a
+  lesson playbook covering full swing, driving, wedges, putting,
+  strategy, wind and the mental game.
+
+## Stack
+
+Vite + React + TypeScript + Tailwind v4 PWA. Leaflet (code-split) over
+Esri World Imagery tiles. OpenStreetMap/Overpass course data (ODbL),
+Open-Meteo weather, MediaPipe Tasks Vision for pose — all keyless.
+State in localStorage; courses & swing videos in IndexedDB; the service
+worker caches the app shell, visited satellite tiles and the last
+weather read for offline rounds.
 
 ```
 src/
-  types/        domain model (shots, rounds, range, drills, profile)
-  data/         clubs, 2 courses, 12 drills, deterministic seed generator
+  types/        domain model + geo types
+  data/         clubs, demo courses, drills, lessons, seed
   lib/
-    physicsEngine.ts      wind/elevation/lie/slope/temp/firmness/strike effects + expected-strokes curve
-    shotNormalization.ts  normalizeShot, plays-like, club confidence, miss patterns, club recommendation
-    caddieEngine.ts       tee & approach advice, hazard pressure vs YOUR miss, risk model
-    aiCoach.ts            templated-but-data-driven feedback, summaries, recaps, practice plans
-    drillEngine.ts        drill scoring & recommendation
-    insights.ts           derived analytics (weaknesses, strokes lost, trends, TSI, gapping)
-    storage.ts            localStorage persistence + export
-  hooks/        useAppState (reducer + persistence), useInstallPrompt
-  components/   AppShell, BottomNav, ui primitives, SVG charts, ARPreview, DrillCard, FeedbackCard
-  screens/      Onboarding, Home, Play, Range, Insights, Profile
-scripts/        icon generator, smoke tests
-public/         manifest.webmanifest, sw.js, icons
+    geo.ts             geodesy: distance/bearing/destination, wind vectors, GPS watcher
+    overpass.ts        course search + download + OSM → GeoCourse parser
+    idb.ts             IndexedDB stores (courses, swings, videos)
+    weather.ts         Open-Meteo client
+    caddieGeo.ts       plays-like + dispersion Monte-Carlo EV target optimizer
+    strokesGained.ts   Broadie baselines, per-shot & per-round SG
+    handicap.ts        WHS: differentials, best-8, caps, net double bogey
+    swingAnalysis.ts   MediaPipe pose → tempo/sway/posture faults
+    physicsEngine.ts / shotNormalization.ts / caddieEngine.ts / aiCoach.ts / insights.ts
+  components/   CourseMap (Leaflet), ARCaddie, SwingPlayer (+tracer export), ui kit, charts
+  screens/      Home, Play (hub + GPS round + card mode), Practice, Swing, Insights, Profile
 ```
 
-All "AI" is local: rules + scoring + varied templates, always derived from real state so every claim is
-explainable. The normalization formulas are simplified but directionally faithful golf physics, and every
-adjustment carries a human-readable note — tap any logged shot to see the full breakdown.
+## Develop
 
-## Known limitations
+```bash
+npm install
+npm run dev      # local dev server
+npm run build    # type-check + production build
+npm run smoke    # SSR render smoke test across all screens
+```
 
-- Holes are data cards, not surveyed maps; the XR view is a stylized projection, not GPS-accurate.
-- Strokes-gained values are fitted approximations, not tour-data lookups.
-- Single-profile, on-device only (localStorage). No backend, auth, or sync.
-- Putting is tracked per-hole (count), not per-putt.
+Deployed automatically by Vercel on push to `main`.
 
-## Next build priorities
-
-1. Real course data (GPS polygons) + device location for auto shot distances.
-2. Per-putt tracking and a short-game module.
-3. Backend sync + multi-device profiles.
-4. Camera-based AR (WebXR) behind the existing XR view contract.
-5. LLM-backed coach swapping in for the template engine (same interfaces in `lib/aiCoach.ts`).
+Course data © OpenStreetMap contributors (ODbL). Imagery © Esri/Maxar.
