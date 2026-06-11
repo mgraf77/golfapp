@@ -178,10 +178,21 @@ export function PlayHub() {
       {nearbyNote && !searchResults && <p className="text-[11px] text-faint mb-2 px-0.5">{nearbyNote}</p>}
 
       {nearbyStatus === 'loading' && !results.length ? (
-        <Card className="text-sm text-muted flex items-center gap-2">
-          <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-          Finding the closest courses…
-        </Card>
+        <div className="flex flex-col gap-2">
+          <p className="text-[12px] text-muted px-0.5 flex items-center gap-2">
+            <span className="inline-block h-3 w-3 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+            Finding the closest courses…
+          </p>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="rounded-2xl border border-line bg-surface p-3.5 flex items-center justify-between gap-3">
+              <div className="flex-1">
+                <div className="skeleton h-4 w-2/3 mb-2" />
+                <div className="skeleton h-3 w-1/3" />
+              </div>
+              <div className="skeleton h-9 w-24 rounded-xl" />
+            </div>
+          ))}
+        </div>
       ) : nearbyStatus === 'error' && !results.length ? (
         <Card className="text-sm text-muted">
           {nearbyNote ?? 'Could not load nearby courses.'}{' '}

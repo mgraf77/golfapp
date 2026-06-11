@@ -35,36 +35,41 @@ export function Home({ onNavigate }: { onNavigate: (t: Tab) => void }) {
   return (
     <div className="animate-fade">
       {/* Hero: True Skill Index */}
-      <Card glow className="flex items-center gap-5">
-        <ProgressRing value={tsi} size={108} stroke={9} sub="TSI" />
-        <div className="flex-1">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-faint">True Skill Index</div>
-          <div className="mt-1 text-[13px] text-muted leading-snug">
-            Built from normalized shots, club confidence, and leak severity — not vanity distances.
-          </div>
-          <div className="mt-2 flex items-center gap-2 text-[13px]">
-            <Badge tone="good">WHS Index {fmtIndex(whs.index)}</Badge>
-            <button className="text-faint text-[11px] underline underline-offset-2" onClick={() => onNavigate('insights')}>
-              {whs.total} scores →
-            </button>
+      <div className="relative overflow-hidden rounded-3xl border border-accent/25 bg-gradient-to-br from-surface-2 via-surface to-surface p-5 shadow-[var(--shadow-glow)]">
+        <div className="pointer-events-none absolute -top-16 -right-16 h-44 w-44 rounded-full bg-accent/10 blur-2xl" />
+        <div className="relative flex items-center gap-5">
+          <ProgressRing value={tsi} size={108} stroke={9} sub="TSI" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-faint">True Skill Index</div>
+            <div className="mt-1 text-[13px] text-muted leading-snug">
+              Built from normalized shots, club confidence, and leak severity — not vanity distances.
+            </div>
+            <div className="mt-2.5 flex items-center gap-2 text-[13px]">
+              <Badge tone="good">WHS Index {fmtIndex(whs.index)}</Badge>
+              <button className="text-faint text-[11px] underline underline-offset-2 py-1" onClick={() => onNavigate('insights')}>
+                {whs.total} scores →
+              </button>
+            </div>
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-3 gap-2 mt-3">
-        <button onClick={() => onNavigate('play')} className="rounded-2xl border border-line bg-surface py-3 active:scale-[0.97] transition-transform">
-          <div className="text-xl">🛰️</div>
-          <div className="text-[11px] font-semibold mt-1">GPS Round</div>
-        </button>
-        <button onClick={() => onNavigate('swing')} className="rounded-2xl border border-line bg-surface py-3 active:scale-[0.97] transition-transform">
-          <div className="text-xl">🎥</div>
-          <div className="text-[11px] font-semibold mt-1">Swing Check</div>
-        </button>
-        <button onClick={() => onNavigate('practice')} className="rounded-2xl border border-line bg-surface py-3 active:scale-[0.97] transition-transform">
-          <div className="text-xl">🏌️</div>
-          <div className="text-[11px] font-semibold mt-1">Practice</div>
-        </button>
+      <div className="grid grid-cols-3 gap-2.5 mt-3">
+        {([
+          ['🛰️', 'GPS Round', 'play', 'from-accent/15 to-transparent border-accent/25'],
+          ['🎥', 'Swing Check', 'swing', 'from-info/15 to-transparent border-info/25'],
+          ['🏌️', 'Practice', 'practice', 'from-gold/15 to-transparent border-gold/25'],
+        ] as const).map(([icon, label, target, grad]) => (
+          <button
+            key={target}
+            onClick={() => onNavigate(target)}
+            className={`rounded-2xl border bg-gradient-to-b ${grad} bg-surface py-3.5 min-h-[72px] active:scale-[0.96] transition-transform shadow-[var(--shadow-card)]`}
+          >
+            <div className="text-2xl leading-none">{icon}</div>
+            <div className="text-[11px] font-bold mt-1.5">{label}</div>
+          </button>
+        ))}
       </div>
 
       {/* Today's focus */}
