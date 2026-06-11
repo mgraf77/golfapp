@@ -5,7 +5,7 @@ import { getApproxLocation } from '../../lib/geo'
 import { downloadCourse, searchCoursesByName, searchCoursesNearby } from '../../lib/overpass'
 import { fetchWeather } from '../../lib/weather'
 import { useAppState } from '../../hooks/useAppState'
-import { Badge, Button, Card, SectionTitle, inputClass } from '../../components/ui'
+import { Badge, Button, Card, SectionTitle, Skeleton, inputClass } from '../../components/ui'
 import { PlayLobby } from '../Play'
 import { RoundPreview } from './RoundPreview'
 
@@ -186,10 +186,10 @@ export function PlayHub() {
           {[0, 1, 2].map((i) => (
             <div key={i} className="rounded-2xl border border-line bg-surface p-3.5 flex items-center justify-between gap-3">
               <div className="flex-1">
-                <div className="skeleton h-4 w-2/3 mb-2" />
-                <div className="skeleton h-3 w-1/3" />
+                <Skeleton className="h-4 w-2/3 mb-2" />
+                <Skeleton className="h-3 w-1/3" />
               </div>
-              <div className="skeleton h-9 w-24 rounded-xl" />
+              <Skeleton className="h-9 w-24 !rounded-xl" />
             </div>
           ))}
         </div>

@@ -58,7 +58,7 @@ export function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => v
     onChange(t)
   }
   return (
-    <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-md md:max-w-xl lg:max-w-2xl -translate-x-1/2 border-t border-line bg-bg/85 backdrop-blur-xl pb-[max(env(safe-area-inset-bottom),8px)]">
+    <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-md md:max-w-xl lg:max-w-2xl -translate-x-1/2 border-t border-line bg-bg/90 backdrop-blur-md pb-[max(env(safe-area-inset-bottom),8px)]">
       <div className="flex px-[max(env(safe-area-inset-left),0px)] pr-[max(env(safe-area-inset-right),0px)]">
         {TABS.map((t) => {
           const active = tab === t.id

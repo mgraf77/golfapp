@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 // ── Card ────────────────────────────────────────────────────────────────
 
@@ -137,7 +137,8 @@ let ringIdSeq = 0
 export function ProgressRing({
   value, size = 96, stroke = 8, label, sub,
 }: { value: number; size?: number; stroke?: number; label?: string; sub?: string }) {
-  const idRef = useRef(`ring-${++ringIdSeq}`)
+  // lazy id: evaluated once per instance, not on every render
+  const id = useMemo(() => `ring-${++ringIdSeq}`, [])
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
   const v = Math.min(100, Math.max(0, value))
@@ -145,7 +146,7 @@ export function ProgressRing({
     <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
         <defs>
-          <linearGradient id={idRef.current} x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id={id} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#34d399" />
             <stop offset="100%" stopColor="#059669" />
           </linearGradient>
@@ -153,7 +154,7 @@ export function ProgressRing({
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-surface-3)" strokeWidth={stroke} />
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none"
-          stroke={`url(#${idRef.current})`} strokeWidth={stroke} strokeLinecap="round"
+          stroke={`url(#${id})`} strokeWidth={stroke} strokeLinecap="round"
           strokeDasharray={c} strokeDashoffset={c * (1 - v / 100)}
           className="transition-all duration-700 drop-shadow-[0_0_6px_rgba(16,185,129,0.45)]"
         />
